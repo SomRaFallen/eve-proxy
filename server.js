@@ -4,7 +4,7 @@ import cors from 'cors';
 
 const app = express();
 
-// Разрешаем CORS для фронтенда GitHub Pages
+// Разрешаем CORS только для фронтенда GitHub Pages
 app.use(cors({ origin: 'https://somrafallen.github.io' }));
 app.use(express.json());
 
