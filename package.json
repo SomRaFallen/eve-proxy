@@ -1,14 +1,14 @@
 {
-  "name": "eve-proxy",
+  "name": "eve-wh-map",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "server/index.js",
   "type": "module",
-  "scripts": {
-    "start": "node server.js"
-  },
   "dependencies": {
     "express": "^4.18.2",
     "node-fetch": "^3.3.2",
     "cors": "^2.8.5"
+  },
+  "scripts": {
+    "start": "node server/index.js"
   }
 }
