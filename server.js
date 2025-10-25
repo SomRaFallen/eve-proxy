@@ -12,7 +12,7 @@ const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
 const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
-let routes = {}; // сохраняем маршруты по CharacterID
+let routes = {}; // хранилище маршрутов по CharacterID
 
 // --- Проверка сервера ---
 app.get('/', (req,res)=>{
