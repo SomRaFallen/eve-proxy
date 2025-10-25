@@ -1,35 +1,46 @@
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
+import express from 'express';
+import cors from 'cors';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const CLIENT_ID = "5a40c55151c241e3a007f2562fd4e1dd";
-const CLIENT_SECRET = "eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd";
+const PORT = process.env.PORT || 3000;
 
-app.post("/exchange", async (req, res) => {
-  try {
-    const { code } = req.body;
-    const creds = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64");
+// Хранилище в памяти для примера
+// Формат: { characterID: [{ id, name, timestamp }, ...] }
+const whHistory = {};
 
-    const r = await fetch("https://login.eveonline.com/v2/oauth/token", {
-      method: "POST",
-      headers: {
-        "Authorization": `Basic ${creds}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: `grant_type=authorization_code&code=${code}`,
-    });
-
-    const data = await r.json();
-    res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+// POST /location — сохраняем текущую систему персонажа
+app.post('/location', (req, res) => {
+    const { characterID, systemID, systemName } = req.body;
+    if (!characterID || !systemID || !systemName) {
+        return res.status(400).send('Missing data');
+    }
+    if (!whHistory[characterID]) whHistory[characterID] = [];
+    whHistory[characterID].push({ id: systemID, name: systemName, timestamp: Date.now() });
+    res.json({ status: 'ok' });
 });
 
-app.get("/", (req, res) => res.send("EVE Proxy is running"));
-app.listen(3000, () => console.log("EVE SSO proxy running on port 3000"));
+// GET /history/:characterID — возвращает историю ВХ
+app.get('/history/:characterID', (req, res) => {
+    const charID = req.params.characterID;
+    res.json(whHistory[charID] || []);
+});
+
+// GET /location?characterID=... — возвращает последнюю систему персонажа
+app.get('/location', (req, res) => {
+    const charID = req.query.characterID;
+    if (!charID) return res.status(400).send('Missing characterID');
+    const history = whHistory[charID];
+    if (!history || history.length === 0) return res.status(404).send('No data');
+    const last = history[history.length - 1];
+    res.json({ system_id: last.id, system_name: last.name });
+});
+
+// Опционально: простой GET для проверки сервера
+app.get('/', (req, res) => {
+    res.send('EVE WH Proxy Server работает');
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
