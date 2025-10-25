@@ -1,21 +1,35 @@
+// server.js
 import express from 'express';
 import fetch from 'node-fetch';
 import cors from 'cors';
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+app.use(cors());              // разрешаем CORS для фронтенда
+app.use(express.json());      // для парсинга JSON
 
+const PORT = process.env.PORT || 3000;
+
+// === Твои данные EVE SSO ===
 const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
 const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
+// === Хранилища маршрутов (для демонстрации, в памяти) ===
+let routes = {};
+let logs = [];
+
+// --- Простая проверка сервера ---
+app.get('/status', (req,res)=>{
+  res.json({status:'EVE WH API Server is running.'});
+});
+
+// --- Exchange SSO code на токен ---
 app.post('/exchange', async (req,res)=>{
   const { code } = req.body;
   if(!code) return res.status(400).send('code missing');
 
   try{
-    // обмен кода на токен
+    // Обмен кода на токен
     const params = new URLSearchParams();
     params.append('grant_type','authorization_code');
     params.append('code',code);
@@ -47,7 +61,7 @@ app.post('/exchange', async (req,res)=>{
     if(!charResp.ok) return res.status(500).send('Ошибка получения персонажа');
     const character = await charResp.json();
 
-    // возвращаем фронтенду
+    logs.push({type:'login', charId:character.character_id, time:Date.now()});
     res.json({ access_token, character });
 
   } catch(e){
@@ -56,4 +70,41 @@ app.post('/exchange', async (req,res)=>{
   }
 });
 
-app.listen(process.env.PORT || 3000, ()=>console.log('EVE WH API Server is running.'));
+// --- Сохраняем маршрут персонажа ---
+app.post('/route/save', (req,res)=>{
+  const { charId, route } = req.body;
+  if(!charId || !route) return res.status(400).send('charId или route missing');
+  routes[charId] = route;
+  logs.push({type:'route_save', charId, route, time:Date.now()});
+  res.json({status:'ok', route});
+});
+
+// --- Получаем маршрут персонажа ---
+app.get('/route/:charId', (req,res)=>{
+  const charId = req.params.charId;
+  if(routes[charId]){
+    res.json({route:routes[charId]});
+  } else res.status(404).json({route:[]});
+});
+
+// --- Очистка маршрута ---
+app.post('/route/clear', (req,res)=>{
+  const { charId } = req.body;
+  if(!charId) return res.status(400).send('charId missing');
+  routes[charId] = [];
+  logs.push({type:'route_clear', charId, time:Date.now()});
+  res.json({status:'cleared'});
+});
+
+// --- Получение логов ---
+app.get('/logs', (req,res)=>{
+  res.json(logs);
+});
+
+// --- Любой GET / возвращает 200 с сообщением (чтобы не было Cannot GET /) ---
+app.get('/', (req,res)=>{
+  res.send('EVE WH API Server is running. Используйте /exchange и /route');
+});
+
+// --- Запуск сервера ---
+app.listen(PORT, ()=>console.log(`EVE WH API Server running on port ${PORT}`));
