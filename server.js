@@ -3,31 +3,25 @@ import fetch from 'node-fetch';
 import cors from 'cors';
 
 const app = express();
-app.use(cors());
+app.use(cors()); // разрешаем все домены для фронтенда
 app.use(express.json());
 
 const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
-const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
+const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/'; // точно совпадает с приложением EVE
 
-// Хранилище истории перемещений
+// Хранилище маршрутов
 let historyData = {};
 
-// Логирование всех запросов
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`, req.body || '');
-  next();
-});
-
-// Корневой маршрут для проверки сервера
-app.get('/', (req,res) => {
-  res.send('EVE WH API Server is running.');
-});
+// Проверка сервера
+app.get('/', (req,res) => res.send('EVE WH API Server is running.'));
 
 // Обмен кода на токен EVE Online
 app.post('/exchange', async (req,res)=>{
   try{
     const { code } = req.body;
+    if(!code) return res.status(400).json({error:'Code обязателен'});
+
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
@@ -53,15 +47,15 @@ app.post('/exchange', async (req,res)=>{
   }
 });
 
-// Сохранение текущей системы персонажа
+// Сохранение текущей системы
 app.post('/location', (req,res)=>{
   try {
     const { characterID, systemID, systemName } = req.body;
-    if(!characterID || !systemID || !systemName) {
-      return res.status(400).json({error:'characterID, systemID и systemName обязательны'});
-    }
+    if(!characterID || !systemID || !systemName)
+      return res.status(400).json({error:'characterID, systemID, systemName обязательны'});
+
     if(!historyData[characterID]) historyData[characterID] = [];
-    historyData[characterID].push({systemID, systemName, timestamp: new Date().toISOString()});
+    historyData[characterID].push({systemID, systemName, timestamp:new Date().toISOString()});
     res.json({ok:true, message:'Локация добавлена'});
   } catch(e){
     console.error(e);
@@ -69,27 +63,17 @@ app.post('/location', (req,res)=>{
   }
 });
 
-// Получение истории перемещений персонажа
+// Получение маршрута
 app.get('/history/:characterID', (req,res)=>{
-  try {
-    const characterID = req.params.characterID;
-    res.json(historyData[characterID] || []);
-  } catch(e){
-    console.error(e);
-    res.status(500).json({error:e.message});
-  }
+  const characterID = req.params.characterID;
+  res.json(historyData[characterID] || []);
 });
 
-// Очистка истории перемещений персонажа
+// Очистка маршрута
 app.delete('/history/:characterID', (req,res)=>{
-  try {
-    const characterID = req.params.characterID;
-    historyData[characterID] = [];
-    res.json({ok:true, message:'История очищена'});
-  } catch(e){
-    console.error(e);
-    res.status(500).json({error:e.message});
-  }
+  const characterID = req.params.characterID;
+  historyData[characterID] = [];
+  res.json({ok:true, message:'История очищена'});
 });
 
 const PORT = process.env.PORT || 3000;
