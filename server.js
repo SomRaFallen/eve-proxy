@@ -10,13 +10,18 @@ const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
 const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
-// Простое хранилище истории перемещений
+// Хранилище истории перемещений
 let historyData = {};
 
 // Логирование всех запросов
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`, req.body || '');
   next();
+});
+
+// Корневой маршрут для проверки сервера
+app.get('/', (req,res) => {
+  res.send('EVE WH API Server is running.');
 });
 
 // Обмен кода на токен EVE Online
