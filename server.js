@@ -2,50 +2,61 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 
+// ==========================
+// 🔧 Конфигурация
+// ==========================
 const app = express();
-app.use(cors());
 app.use(express.json());
+app.use(cors({
+  origin: "https://somrafallen.github.io", // твой фронтенд
+}));
 
-// ⚙️ Настройки
 const CLIENT_ID = "5a40c55151c241e3a007f2562fd4e1dd";
-const CLIENT_SECRET = "YOUR_CLIENT_SECRET"; // ⚠️ вставь свой секрет с developers.eveonline.com
+const CLIENT_SECRET = "YOUR_CLIENT_SECRET"; // ⚠️ вставь свой CCP Secret
 const REDIRECT_URI = "https://somrafallen.github.io/eve-wh-map/";
 
-// 🗂️ Простая база данных в памяти
-let userData = {}; 
-// userData[characterID] = { history: [...], map: {nodes:[], edges:[]} }
+// Простая память сервера (временная база)
+let userData = {}; // characterID -> { history: [], map: { nodes: [], edges: [] } }
 
-// 🧩 Обмен кода на токен
+// ==========================
+// 🔐 OAuth — обмен кода на токен
+// ==========================
 app.post("/exchange", async (req, res) => {
   try {
     const { code } = req.body;
-    const response = await fetch("https://login.eveonline.com/v2/oauth/token", {
+    if (!code) return res.status(400).json({ error: "Нет кода авторизации" });
+
+    const params = new URLSearchParams();
+    params.append("grant_type", "authorization_code");
+    params.append("code", code);
+    params.append("redirect_uri", REDIRECT_URI);
+
+    const tokenResponse = await fetch("https://login.eveonline.com/v2/oauth/token", {
       method: "POST",
       headers: {
-        Authorization:
-          "Basic " + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64"),
+        "Authorization": "Basic " + Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString("base64"),
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-      }),
+      body: params.toString(),
     });
 
-    if (!response.ok) {
-      const text = await response.text();
-      return res.status(400).json({ error: "Ошибка обмена токена", details: text });
+    const text = await tokenResponse.text();
+    if (!tokenResponse.ok) {
+      console.error("Ошибка обмена токена:", text);
+      return res.status(400).json({ error: "Ошибка обмена кода", details: text });
     }
 
-    const data = await response.json();
+    const data = JSON.parse(text);
     res.json(data);
-  } catch (e) {
-    console.error("Ошибка обмена токена:", e);
-    res.status(500).json({ error: e.message });
+  } catch (err) {
+    console.error("Ошибка при авторизации:", err);
+    res.status(500).json({ error: "Ошибка обмена токена", details: err.message });
   }
 });
 
-// 🛰️ Добавить новую систему в историю
+// ==========================
+// 📍 Добавление систем в маршрут
+// ==========================
 app.post("/location", (req, res) => {
   const { characterID, systemID, systemName } = req.body;
   if (!characterID || !systemID || !systemName) {
@@ -65,16 +76,18 @@ app.post("/location", (req, res) => {
   res.json({ success: true, message: "Система добавлена" });
 });
 
-// 📜 Получить историю маршрута
+// ==========================
+// 🧭 Получение истории маршрута
+// ==========================
 app.get("/history/:characterID", (req, res) => {
   const { characterID } = req.params;
-  if (!userData[characterID]) {
-    return res.json([]);
-  }
-  res.json(userData[characterID].history);
+  const history = userData[characterID]?.history || [];
+  res.json(history);
 });
 
-// 🧹 Очистить историю
+// ==========================
+// 🧹 Очистка истории
+// ==========================
 app.delete("/history/:characterID", (req, res) => {
   const { characterID } = req.params;
   if (userData[characterID]) {
@@ -84,8 +97,10 @@ app.delete("/history/:characterID", (req, res) => {
   res.json({ success: true });
 });
 
-// 💾 Сохранить карту (узлы + связи)
-app.post("/history/:characterID", (req, res) => {
+// ==========================
+// 💾 Сохранение карты (узлы + связи)
+// ==========================
+app.post("/map/:characterID", (req, res) => {
   const { characterID } = req.params;
   const { nodes, edges } = req.body;
   if (!userData[characterID]) {
@@ -95,22 +110,26 @@ app.post("/history/:characterID", (req, res) => {
   res.json({ success: true, message: "Карта сохранена" });
 });
 
-// 📡 Получить сохранённую карту
+// ==========================
+// 🌌 Получение карты
+// ==========================
 app.get("/map/:characterID", (req, res) => {
   const { characterID } = req.params;
-  if (!userData[characterID]) {
-    return res.json({ nodes: [], edges: [] });
-  }
-  res.json(userData[characterID].map);
+  const map = userData[characterID]?.map || { nodes: [], edges: [] };
+  res.json(map);
 });
 
-// 🌐 Проверка
+// ==========================
+// 🌍 Проверка сервера
+// ==========================
 app.get("/", (req, res) => {
-  res.send("✅ EVE WH API Server is running.");
+  res.send("✅ EVE WH API Server is running!");
 });
 
+// ==========================
 // 🚀 Запуск
+// ==========================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 EVE WH API Server started on port ${PORT}`);
+  console.log(`🚀 Server started on port ${PORT}`);
 });
