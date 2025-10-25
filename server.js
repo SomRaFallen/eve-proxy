@@ -7,23 +7,19 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-
 const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
 const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
 let routes = {}; // хранилище маршрутов по CharacterID
 
-// --- Проверка сервера ---
-app.get('/', (req,res)=>{
-  res.send('EVE WH API Server is running. Используйте /exchange и /route');
-});
+app.get('/', (req,res)=>res.send('EVE WH API Server running'));
 
 // --- Обмен кода на токен ---
-app.post('/exchange', async (req, res) => {
-  try {
+app.post('/exchange', async (req,res)=>{
+  try{
     const { code } = req.body;
-    if(!code) return res.status(400).json({ error: 'code required' });
+    if(!code) return res.status(400).json({ error:'code required' });
 
     const params = new URLSearchParams();
     params.append('grant_type','authorization_code');
@@ -47,30 +43,22 @@ app.post('/exchange', async (req, res) => {
     });
     const userData = await userResp.json();
 
-    // Получаем текущую систему
-    const locResp = await fetch(`https://esi.evetech.net/latest/characters/${userData.CharacterID}/location/`,{
-      headers:{'Authorization':`Bearer ${tokenData.access_token}`}
-    });
-    const locData = await locResp.json();
-
+    // Тестовая система (можно потом через ESI location)
+    const systemId = 31000001; 
     const character = {
       CharacterID: userData.CharacterID,
       CharacterName: userData.CharacterName,
-      SystemName: locData.solar_system_id ? `J${locData.solar_system_id}` : "J114337"
+      SystemName: `J${systemId}`
     };
 
     res.json({ access_token: tokenData.access_token, character });
-  } catch(e){
-    console.error(e);
-    res.status(500).json({ error:e.message });
-  }
+  } catch(e){ console.error(e); res.status(500).json({ error:e.message }); }
 });
 
 // --- Маршрут ---
 app.get('/route/:characterId', (req,res)=>{
   const { characterId } = req.params;
-  if(!routes[characterId]) return res.json({ nodes:[], edges:[] });
-  res.json(routes[characterId]);
+  res.json(routes[characterId] || { nodes:[], edges:[] });
 });
 
 app.post('/route/:characterId', (req,res)=>{
@@ -93,28 +81,25 @@ app.get('/search', async (req,res)=>{
   try{
     const searchResp = await fetch(`https://esi.evetech.net/latest/search/?categories=character&search=${encodeURIComponent(query)}&strict=false`);
     const searchData = await searchResp.json();
-    const results = searchData.character || [];
-    const characters = results.map(id=>({ id, name:`Character ${id}` })); 
+    const characters = (searchData.character || []).map(id=>({ id, name:`Character ${id}` }));
     res.json(characters);
-  }catch(e){ res.status(500).json({ error:e.message }); }
+  } catch(e){ res.status(500).json({ error:e.message }); }
 });
 
-// --- ZKB киллмейлы ---
+// --- ZKB киллы ---
 app.get('/zkbKills', async (req,res)=>{
   const { characterId } = req.query;
   if(!characterId) return res.status(400).json({ error:'characterId required' });
   try{
     const resp = await fetch(`https://zkillboard.com/api/characters/${characterId}/recent.json/`);
     const data = await resp.json();
-    const kills = data.slice(0,10).map(k=>{
-      return {
-        solarSystem: k.solarSystemName,
-        date: k.killTime,
-        ship: k.victim.shipTypeName
-      };
-    });
+    const kills = data.slice(0,10).map(k=>({
+      solarSystem: k.solarSystemName,
+      date: k.killTime,
+      ship: k.victim.shipTypeName
+    }));
     res.json(kills);
-  }catch(e){ res.status(500).json({ error:e.message }); }
+  } catch(e){ res.status(500).json({ error:e.message }); }
 });
 
-app.listen(PORT, ()=>console.log(`EVE WH API Server is running on port ${PORT}`));
+app.listen(PORT, ()=>console.log(`EVE WH API Server running on port ${PORT}`));
