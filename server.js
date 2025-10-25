@@ -62,7 +62,7 @@ app.post('/exchange', async (req,res)=>{
 app.post('/zkb/exchange', async (req,res)=>{
   const { characterId } = req.body;
   if(!characterId) return res.status(400).json({error:'characterId required'});
-  // Здесь можно добавить ZKB авторизацию, пока просто заглушка
+  // Заглушка токена ZKB
   res.json({ access_token: 'zkb_dummy_token', characterId });
 });
 
@@ -74,6 +74,17 @@ app.get('/zkb/kills', async (req,res)=>{
   res.json({ kills:[
     { system:'J114337', date:'2025-10-26', ship:'Rattlesnake' },
     { system:'J100000', date:'2025-10-25', ship:'Rokh' }
+  ]});
+});
+
+// ===== /zkb/search =====
+app.get('/zkb/search', async (req,res)=>{
+  const { name } = req.query;
+  if(!name) return res.status(400).json({error:'name required'});
+  // Заглушка поиска
+  res.json({ results:[
+    { characterId: 123456, name: name+"1" },
+    { characterId: 123457, name: name+"2" }
   ]});
 });
 
