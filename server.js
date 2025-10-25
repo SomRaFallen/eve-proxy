@@ -10,6 +10,16 @@ const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
 const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
+// Простое хранилище истории перемещений
+let historyData = {};
+
+// Логирование всех запросов
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`, req.body || '');
+  next();
+});
+
+// Обмен кода на токен EVE Online
 app.post('/exchange', async (req,res)=>{
   try{
     const { code } = req.body;
@@ -32,6 +42,45 @@ app.post('/exchange', async (req,res)=>{
     if(!response.ok) return res.status(response.status).json(data);
     res.json(data);
 
+  } catch(e){
+    console.error(e);
+    res.status(500).json({error:e.message});
+  }
+});
+
+// Сохранение текущей системы персонажа
+app.post('/location', (req,res)=>{
+  try {
+    const { characterID, systemID, systemName } = req.body;
+    if(!characterID || !systemID || !systemName) {
+      return res.status(400).json({error:'characterID, systemID и systemName обязательны'});
+    }
+    if(!historyData[characterID]) historyData[characterID] = [];
+    historyData[characterID].push({systemID, systemName, timestamp: new Date().toISOString()});
+    res.json({ok:true, message:'Локация добавлена'});
+  } catch(e){
+    console.error(e);
+    res.status(500).json({error:e.message});
+  }
+});
+
+// Получение истории перемещений персонажа
+app.get('/history/:characterID', (req,res)=>{
+  try {
+    const characterID = req.params.characterID;
+    res.json(historyData[characterID] || []);
+  } catch(e){
+    console.error(e);
+    res.status(500).json({error:e.message});
+  }
+});
+
+// Очистка истории перемещений персонажа
+app.delete('/history/:characterID', (req,res)=>{
+  try {
+    const characterID = req.params.characterID;
+    historyData[characterID] = [];
+    res.json({ok:true, message:'История очищена'});
   } catch(e){
     console.error(e);
     res.status(500).json({error:e.message});
