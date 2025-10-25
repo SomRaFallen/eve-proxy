@@ -12,7 +12,12 @@ const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
 const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
-let routes = {}; // сохранение маршрутов по characterId
+let routes = {}; // сохраняем маршруты по CharacterID
+
+// --- Проверка сервера ---
+app.get('/', (req,res)=>{
+  res.send('EVE WH API Server is running. Используйте /exchange и /route');
+});
 
 // --- Обмен кода на токен ---
 app.post('/exchange', async (req, res) => {
@@ -89,7 +94,7 @@ app.get('/search', async (req,res)=>{
     const searchResp = await fetch(`https://esi.evetech.net/latest/search/?categories=character&search=${encodeURIComponent(query)}&strict=false`);
     const searchData = await searchResp.json();
     const results = searchData.character || [];
-    const characters = results.map(id=>({ id, name:`Character ${id}` })); // Можно подключить ESI /characters/{id}/
+    const characters = results.map(id=>({ id, name:`Character ${id}` })); 
     res.json(characters);
   }catch(e){ res.status(500).json({ error:e.message }); }
 });
