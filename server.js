@@ -5,42 +5,53 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT || 3000;
+// Хранилище истории перемещений
+let historyData = {};
 
-// Хранилище в памяти для примера
-// Формат: { characterID: [{ id, name, timestamp }, ...] }
-const whHistory = {};
+// Логирование всех запросов
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`, req.body || '');
+  next();
+});
 
-// POST /location — сохраняем текущую систему персонажа
+// Добавить текущее местоположение персонажа
 app.post('/location', (req, res) => {
+  try {
     const { characterID, systemID, systemName } = req.body;
     if (!characterID || !systemID || !systemName) {
-        return res.status(400).send('Missing data');
+      return res.status(400).json({ error: 'characterID, systemID и systemName обязательны' });
     }
-    if (!whHistory[characterID]) whHistory[characterID] = [];
-    whHistory[characterID].push({ id: systemID, name: systemName, timestamp: Date.now() });
-    res.json({ status: 'ok' });
+    if (!historyData[characterID]) historyData[characterID] = [];
+    historyData[characterID].push({ systemID, systemName, timestamp: new Date().toISOString() });
+    res.json({ ok: true, message: 'Локация добавлена' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// GET /history/:characterID — возвращает историю ВХ
+// Получить историю перемещений персонажа
 app.get('/history/:characterID', (req, res) => {
-    const charID = req.params.characterID;
-    res.json(whHistory[charID] || []);
+  try {
+    const characterID = req.params.characterID;
+    res.json(historyData[characterID] || []);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// GET /location?characterID=... — возвращает последнюю систему персонажа
-app.get('/location', (req, res) => {
-    const charID = req.query.characterID;
-    if (!charID) return res.status(400).send('Missing characterID');
-    const history = whHistory[charID];
-    if (!history || history.length === 0) return res.status(404).send('No data');
-    const last = history[history.length - 1];
-    res.json({ system_id: last.id, system_name: last.name });
+// Очистить историю перемещений персонажа
+app.delete('/history/:characterID', (req, res) => {
+  try {
+    const characterID = req.params.characterID;
+    historyData[characterID] = [];
+    res.json({ ok: true, message: 'История очищена' });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message });
+  }
 });
 
-// Опционально: простой GET для проверки сервера
-app.get('/', (req, res) => {
-    res.send('EVE WH Proxy Server работает');
-});
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server started on port ${PORT}`));
