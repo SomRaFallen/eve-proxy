@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Хранилище истории перемещений в памяти
+// Хранилище истории перемещений
 let historyData = {};
 
 // Сохранение текущей системы
@@ -24,7 +24,7 @@ app.post('/location', (req,res)=>{
     res.json({ok:true});
 });
 
-// Получение истории перемещений
+// Получение истории
 app.get('/history/:characterID', (req,res)=>{
     const id = req.params.characterID;
     res.json(historyData[id] || []);
@@ -75,11 +75,11 @@ app.post('/exchange', async (req,res)=>{
     }
 });
 
-// Отдача фронтенда на '/'
-app.get('/', (req,res)=>{
+// Любой несуществующий путь → отдаём index.html
+app.get('*', (req,res)=>{
     res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
-// Запуск сервера на Render
+// Запуск сервера
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, ()=>console.log(`Server started on port ${PORT}`));
