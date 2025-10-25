@@ -2,24 +2,21 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 
-// ==========================
-// 🔧 Конфигурация
-// ==========================
 const app = express();
 app.use(express.json());
 app.use(cors({
-  origin: "https://somrafallen.github.io", // твой фронтенд
+  origin: "https://somrafallen.github.io", // фронтенд
 }));
 
+// 🔧 Настройки
 const CLIENT_ID = "5a40c55151c241e3a007f2562fd4e1dd";
-const CLIENT_SECRET = "YOUR_CLIENT_SECRET"; // ⚠️ вставь свой CCP Secret
+const CLIENT_SECRET = process.env.CLIENT_SECRET || "YOUR_CLIENT_SECRET";
 const REDIRECT_URI = "https://somrafallen.github.io/eve-wh-map/";
 
-// Простая память сервера (временная база)
-let userData = {}; // characterID -> { history: [], map: { nodes: [], edges: [] } }
+let userData = {}; // characterID -> { token, history, map }
 
 // ==========================
-// 🔐 OAuth — обмен кода на токен
+// 🔐 Обмен кода на токен
 // ==========================
 app.post("/exchange", async (req, res) => {
   try {
@@ -47,7 +44,21 @@ app.post("/exchange", async (req, res) => {
     }
 
     const data = JSON.parse(text);
-    res.json(data);
+
+    // Получаем данные о персонаже
+    const verifyRes = await fetch("https://login.eveonline.com/oauth/verify", {
+      headers: { Authorization: `Bearer ${data.access_token}` },
+    });
+    const verifyData = await verifyRes.json();
+
+    const characterID = verifyData.CharacterID;
+    userData[characterID] = {
+      token: data.access_token,
+      history: [],
+      map: { nodes: [], edges: [] },
+    };
+
+    res.json({ ...data, character: verifyData });
   } catch (err) {
     console.error("Ошибка при авторизации:", err);
     res.status(500).json({ error: "Ошибка обмена токена", details: err.message });
@@ -55,29 +66,61 @@ app.post("/exchange", async (req, res) => {
 });
 
 // ==========================
-// 📍 Добавление систем в маршрут
+// 📡 Получение текущей системы пилота
 // ==========================
-app.post("/location", (req, res) => {
-  const { characterID, systemID, systemName } = req.body;
-  if (!characterID || !systemID || !systemName) {
-    return res.status(400).json({ error: "Неполные данные" });
-  }
+async function getCurrentLocation(characterID) {
+  const user = userData[characterID];
+  if (!user || !user.token) throw new Error("Нет токена для персонажа");
 
-  if (!userData[characterID]) {
-    userData[characterID] = { history: [], map: { nodes: [], edges: [] } };
-  }
-
-  userData[characterID].history.push({
-    systemID,
-    systemName,
-    timestamp: new Date().toISOString(),
+  const res = await fetch(`https://esi.evetech.net/latest/characters/${characterID}/location/`, {
+    headers: { Authorization: `Bearer ${user.token}` },
   });
 
-  res.json({ success: true, message: "Система добавлена" });
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("Ошибка получения локации:", text);
+    throw new Error("Не удалось получить текущее местоположение");
+  }
+
+  const data = await res.json();
+
+  // Получаем имя системы
+  const sysRes = await fetch(`https://esi.evetech.net/latest/universe/systems/${data.solar_system_id}/`);
+  const sysData = await sysRes.json();
+
+  return {
+    systemID: data.solar_system_id,
+    systemName: sysData.name,
+  };
+}
+
+// ==========================
+// 📍 Сохранение текущей системы в историю
+// ==========================
+app.post("/location/:characterID", async (req, res) => {
+  try {
+    const { characterID } = req.params;
+    const location = await getCurrentLocation(characterID);
+
+    if (!userData[characterID]) {
+      userData[characterID] = { history: [], map: { nodes: [], edges: [] } };
+    }
+
+    userData[characterID].history.push({
+      systemID: location.systemID,
+      systemName: location.systemName,
+      timestamp: new Date().toISOString(),
+    });
+
+    res.json({ success: true, message: "Локация добавлена", location });
+  } catch (err) {
+    console.error("Ошибка сохранения локации:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ==========================
-// 🧭 Получение истории маршрута
+// 📜 История маршрута
 // ==========================
 app.get("/history/:characterID", (req, res) => {
   const { characterID } = req.params;
@@ -86,7 +129,7 @@ app.get("/history/:characterID", (req, res) => {
 });
 
 // ==========================
-// 🧹 Очистка истории
+// 🧹 Очистка маршрута
 // ==========================
 app.delete("/history/:characterID", (req, res) => {
   const { characterID } = req.params;
@@ -98,7 +141,7 @@ app.delete("/history/:characterID", (req, res) => {
 });
 
 // ==========================
-// 💾 Сохранение карты (узлы + связи)
+// 💾 Сохранение карты
 // ==========================
 app.post("/map/:characterID", (req, res) => {
   const { characterID } = req.params;
@@ -107,7 +150,7 @@ app.post("/map/:characterID", (req, res) => {
     userData[characterID] = { history: [], map: { nodes: [], edges: [] } };
   }
   userData[characterID].map = { nodes, edges };
-  res.json({ success: true, message: "Карта сохранена" });
+  res.json({ success: true });
 });
 
 // ==========================
@@ -120,10 +163,10 @@ app.get("/map/:characterID", (req, res) => {
 });
 
 // ==========================
-// 🌍 Проверка сервера
+// 🌍 Проверка
 // ==========================
 app.get("/", (req, res) => {
-  res.send("✅ EVE WH API Server is running!");
+  res.send("✅ EVE WH API Server is running with auto-location!");
 });
 
 // ==========================
