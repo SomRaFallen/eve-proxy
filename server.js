@@ -1,71 +1,46 @@
 import express from 'express';
-import fetch from 'node-fetch';
 import cors from 'cors';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-let historyData = {}; // { characterID: [{systemID, systemName}, ...] }
+const PORT = process.env.PORT || 3000;
 
-// Сохранение текущей системы
-app.post('/location', (req,res)=>{
-    const {characterID, systemID, systemName} = req.body;
-    if(!historyData[characterID]) historyData[characterID]=[];
-    historyData[characterID].push({systemID, systemName});
-    res.json({ok:true});
-});
+// Хранилище в памяти для примера
+// Формат: { characterID: [{ id, name, timestamp }, ...] }
+const whHistory = {};
 
-// Получение истории перемещений
-app.get('/history/:characterID', (req,res)=>{
-    const id = req.params.characterID;
-    res.json(historyData[id] || []);
-});
-
-// Очистка истории
-app.delete('/history/:characterID', (req,res)=>{
-    const id = req.params.characterID;
-    historyData[id] = [];
-    res.json({ok:true});
-});
-
-// Прокси для ZKillboard
-app.get('/zkb/:characterID', async (req,res)=>{
-    try{
-        const r = await fetch(`https://zkillboard.com/api/characters/${req.params.characterID}/recent/`);
-        const data = await r.json();
-        res.json(data);
-    }catch(e){
-        res.status(500).json({error:e.message});
+// POST /location — сохраняем текущую систему персонажа
+app.post('/location', (req, res) => {
+    const { characterID, systemID, systemName } = req.body;
+    if (!characterID || !systemID || !systemName) {
+        return res.status(400).send('Missing data');
     }
+    if (!whHistory[characterID]) whHistory[characterID] = [];
+    whHistory[characterID].push({ id: systemID, name: systemName, timestamp: Date.now() });
+    res.json({ status: 'ok' });
 });
 
-// Обмен кода на токен EVE Online
-app.post('/exchange', async (req,res)=>{
-    const { code } = req.body;
-    // Тут вставьте ваш client_id и client_secret
-    const client_id = '5a40c55151c241e3a007f2562fd4e1dd';
-    const client_secret = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
-    const redirect_uri = 'https://somrafallen.github.io/eve-wh-map/';
-
-    try{
-        const r = await fetch('https://login.eveonline.com/v2/oauth/token', {
-            method:'POST',
-            headers: {
-                'Authorization':'Basic '+Buffer.from(`${client_id}:${client_secret}`).toString('base64'),
-                'Content-Type':'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-                grant_type:'authorization_code',
-                code,
-                redirect_uri
-            })
-        });
-        const data = await r.json();
-        res.json(data);
-    }catch(e){
-        res.status(500).json({error:e.message});
-    }
+// GET /history/:characterID — возвращает историю ВХ
+app.get('/history/:characterID', (req, res) => {
+    const charID = req.params.characterID;
+    res.json(whHistory[charID] || []);
 });
 
-app.listen(process.env.PORT || 3000, ()=>console.log('Server started'));
+// GET /location?characterID=... — возвращает последнюю систему персонажа
+app.get('/location', (req, res) => {
+    const charID = req.query.characterID;
+    if (!charID) return res.status(400).send('Missing characterID');
+    const history = whHistory[charID];
+    if (!history || history.length === 0) return res.status(404).send('No data');
+    const last = history[history.length - 1];
+    res.json({ system_id: last.id, system_name: last.name });
+});
+
+// Опционально: простой GET для проверки сервера
+app.get('/', (req, res) => {
+    res.send('EVE WH Proxy Server работает');
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
