@@ -1,117 +1,103 @@
-// server.js
 import express from 'express';
 import fetch from 'node-fetch';
+import bodyParser from 'body-parser';
 import cors from 'cors';
 
 const app = express();
-app.use(cors());
-app.use(express.json());
-
 const PORT = process.env.PORT || 3000;
 
-// === Данные EVE SSO ===
+app.use(cors({
+  origin: 'https://somrafallen.github.io',
+  methods: ['GET','POST','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type']
+}));
+app.use(bodyParser.json());
+
+// ===== Параметры EVE SSO =====
 const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
 const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
-// --- Временное хранилище маршрутов и логов
-let routes = {};
-let logs = [];
+// ===== Временное хранение маршрутов =====
+const routes = {}; // characterId -> { nodes, edges }
 
-// --- Проверка сервера ---
-app.get('/status', (req,res)=>{
-  res.json({status:'EVE WH API Server is running.'});
-});
-
-// --- Главная страница ---
-app.get('/', (req,res)=>{
-  res.send('EVE WH API Server is running. Используйте /exchange и /route');
-});
-
-// --- Exchange SSO code на токен + получение character_id ---
+// ===== /exchange =====
 app.post('/exchange', async (req,res)=>{
   const { code } = req.body;
-  if(!code) return res.status(400).send('code missing');
-
+  if(!code) return res.status(400).json({error:'code required'});
   try{
-    console.log('Получен код SSO:', code);
-
-    // Обмен кода на токен
-    const params = new URLSearchParams();
-    params.append('grant_type','authorization_code');
-    params.append('code', code);
-    params.append('redirect_uri', REDIRECT_URI);
-
-    const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-
-    const tokenResp = await fetch('https://login.eveonline.com/v2/oauth/token', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Basic ' + auth,
-        'Content-Type': 'application/x-www-form-urlencoded'
+    const tokenResp = await fetch('https://login.eveonline.com/v2/oauth/token',{
+      method:'POST',
+      headers:{
+        'Authorization':'Basic '+Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64'),
+        'Content-Type':'application/x-www-form-urlencoded'
       },
-      body: params.toString()
+      body: new URLSearchParams({
+        grant_type:'authorization_code',
+        code,
+        redirect_uri:REDIRECT_URI
+      })
     });
-
-    if(!tokenResp.ok){
-      const t = await tokenResp.text();
-      console.error('Ошибка получения токена:', t);
-      return res.status(500).send('Ошибка токена: '+t);
-    }
-
     const tokenData = await tokenResp.json();
-    const access_token = tokenData.access_token;
-    const character_id = tokenData.character_id; // ✅ Используем character_id напрямую
-    console.log('Access token:', access_token);
-    console.log('Character ID:', character_id);
-
-    // Сохраняем лог авторизации
-    logs.push({type:'login', charId:character_id, time:Date.now()});
-
-    // Отправляем на фронтенд
-    res.json({
-      access_token,
-      character: {
-        CharacterID: character_id,
-        CharacterName: tokenData.character_name || 'Unknown'
-      }
+    if(!tokenData.access_token) return res.status(400).json({error:'Failed to get access_token'});
+    
+    // Получаем информацию о персонаже
+    const charResp = await fetch('https://esi.evetech.net/latest/characters/me/?datasource=tranquility',{
+      headers:{'Authorization':'Bearer '+tokenData.access_token}
     });
-
-  } catch(e){
-    console.error('Server error:', e);
-    res.status(500).send('Server error: '+e.message);
+    const charData = await charResp.json();
+    const character = {
+      CharacterID: charData.character_id,
+      CharacterName: charData.name || 'Unknown'
+    };
+    
+    res.json({ access_token: tokenData.access_token, character });
+  }catch(e){
+    console.error(e);
+    res.status(500).json({error:e.message});
   }
 });
 
-// --- Сохраняем маршрут ---
-app.post('/route/save', (req,res)=>{
-  const { charId, route } = req.body;
-  if(!charId || !route) return res.status(400).send('charId или route missing');
-  routes[charId] = route;
-  logs.push({type:'route_save', charId, route, time:Date.now()});
-  res.json({status:'ok', route});
+// ===== /zkb/exchange =====
+app.post('/zkb/exchange', async (req,res)=>{
+  const { characterId } = req.body;
+  if(!characterId) return res.status(400).json({error:'characterId required'});
+  // Здесь можно добавить ZKB авторизацию, пока просто заглушка
+  res.json({ access_token: 'zkb_dummy_token', characterId });
 });
 
-// --- Получаем маршрут ---
-app.get('/route/:charId', (req,res)=>{
-  const charId = req.params.charId;
-  if(routes[charId]){
-    res.json({route:routes[charId]});
-  } else res.status(404).json({route:[]});
+// ===== /zkb/kills =====
+app.get('/zkb/kills', async (req,res)=>{
+  const { characterId } = req.query;
+  if(!characterId) return res.status(400).json({error:'characterId required'});
+  // Заглушка киллмейлов
+  res.json({ kills:[
+    { system:'J114337', date:'2025-10-26', ship:'Rattlesnake' },
+    { system:'J100000', date:'2025-10-25', ship:'Rokh' }
+  ]});
 });
 
-// --- Очистка маршрута ---
-app.post('/route/clear', (req,res)=>{
-  const { charId } = req.body;
-  if(!charId) return res.status(400).send('charId missing');
-  routes[charId] = [];
-  logs.push({type:'route_clear', charId, time:Date.now()});
-  res.json({status:'cleared'});
+// ===== /route POST =====
+app.post('/route', (req,res)=>{
+  const { characterId, nodes: n, edges: e } = req.body;
+  if(!characterId) return res.status(400).json({error:'characterId required'});
+  routes[characterId] = { nodes: n, edges: e };
+  res.json({status:'ok'});
 });
 
-// --- Получение логов ---
-app.get('/logs', (req,res)=>{
-  res.json(logs);
+// ===== /route GET =====
+app.get('/route', (req,res)=>{
+  const { characterId } = req.query;
+  if(!characterId) return res.status(400).json({error:'characterId required'});
+  res.json(routes[characterId] || { nodes: [], edges: [] });
 });
 
-app.listen(PORT, ()=>console.log(`EVE WH API Server running on port ${PORT}`));
+// ===== /route DELETE =====
+app.delete('/route', (req,res)=>{
+  const { characterId } = req.body;
+  if(!characterId) return res.status(400).json({error:'characterId required'});
+  delete routes[characterId];
+  res.json({status:'deleted'});
+});
+
+app.listen(PORT, ()=>console.log(`EVE WH API Server is running on port ${PORT}`));
