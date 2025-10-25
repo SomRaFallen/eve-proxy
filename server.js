@@ -14,7 +14,7 @@ const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
 const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
-// === Временное хранилище маршрутов ===
+// --- Временное хранилище маршрутов и логов
 let routes = {};
 let logs = [];
 
@@ -23,12 +23,12 @@ app.get('/status', (req,res)=>{
   res.json({status:'EVE WH API Server is running.'});
 });
 
-// --- Главная страница (чтобы не было Cannot GET /) ---
+// --- Главная страница ---
 app.get('/', (req,res)=>{
   res.send('EVE WH API Server is running. Используйте /exchange и /route');
 });
 
-// --- Exchange SSO code на токен + получение персонажа ---
+// --- Exchange SSO code на токен + получение character_id ---
 app.post('/exchange', async (req,res)=>{
   const { code } = req.body;
   if(!code) return res.status(400).send('code missing');
@@ -61,24 +61,21 @@ app.post('/exchange', async (req,res)=>{
 
     const tokenData = await tokenResp.json();
     const access_token = tokenData.access_token;
+    const character_id = tokenData.character_id; // ✅ Используем character_id напрямую
     console.log('Access token:', access_token);
+    console.log('Character ID:', character_id);
 
-    // Получение персонажа
-    const charResp = await fetch('https://esi.evetech.net/latest/characters/me/?datasource=tranquility', {
-      headers: { 'Authorization': 'Bearer ' + access_token }
+    // Сохраняем лог авторизации
+    logs.push({type:'login', charId:character_id, time:Date.now()});
+
+    // Отправляем на фронтенд
+    res.json({
+      access_token,
+      character: {
+        CharacterID: character_id,
+        CharacterName: tokenData.character_name || 'Unknown'
+      }
     });
-
-    if(!charResp.ok){
-      const t = await charResp.text();
-      console.error('Ошибка получения персонажа:', t);
-      return res.status(500).send('Ошибка получения персонажа: '+t);
-    }
-
-    const character = await charResp.json();
-    console.log('Персонаж:', character);
-
-    logs.push({type:'login', charId:character.character_id, time:Date.now()});
-    res.json({ access_token, character });
 
   } catch(e){
     console.error('Server error:', e);
