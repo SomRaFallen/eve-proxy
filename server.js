@@ -3,12 +3,14 @@ import fetch from 'node-fetch';
 import cors from 'cors';
 
 const app = express();
-app.use(cors()); // разрешаем все домены для фронтенда
+
+// Разрешаем CORS для фронтенда GitHub Pages
+app.use(cors({ origin: 'https://somrafallen.github.io' }));
 app.use(express.json());
 
 const CLIENT_ID = '5a40c55151c241e3a007f2562fd4e1dd';
 const CLIENT_SECRET = 'eat_2G6i70t3CYhTxZ1ytUo04vA1IhZnmoziW_p1Pgd';
-const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/'; // точно совпадает с приложением EVE
+const REDIRECT_URI = 'https://somrafallen.github.io/eve-wh-map/';
 
 // Хранилище маршрутов
 let historyData = {};
@@ -16,7 +18,7 @@ let historyData = {};
 // Проверка сервера
 app.get('/', (req,res) => res.send('EVE WH API Server is running.'));
 
-// Обмен кода на токен EVE Online
+// Обмен кода на токен
 app.post('/exchange', async (req,res)=>{
   try{
     const { code } = req.body;
@@ -49,18 +51,13 @@ app.post('/exchange', async (req,res)=>{
 
 // Сохранение текущей системы
 app.post('/location', (req,res)=>{
-  try {
-    const { characterID, systemID, systemName } = req.body;
-    if(!characterID || !systemID || !systemName)
-      return res.status(400).json({error:'characterID, systemID, systemName обязательны'});
+  const { characterID, systemID, systemName } = req.body;
+  if(!characterID || !systemID || !systemName)
+    return res.status(400).json({error:'characterID, systemID, systemName обязательны'});
 
-    if(!historyData[characterID]) historyData[characterID] = [];
-    historyData[characterID].push({systemID, systemName, timestamp:new Date().toISOString()});
-    res.json({ok:true, message:'Локация добавлена'});
-  } catch(e){
-    console.error(e);
-    res.status(500).json({error:e.message});
-  }
+  if(!historyData[characterID]) historyData[characterID] = [];
+  historyData[characterID].push({systemID, systemName, timestamp:new Date().toISOString()});
+  res.json({ok:true, message:'Локация добавлена'});
 });
 
 // Получение маршрута
