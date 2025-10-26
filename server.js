@@ -1,45 +1,40 @@
 import express from 'express';
-import fetch from 'node-fetch';
+import fs from 'fs';
 import cors from 'cors';
-import dotenv from 'dotenv';
 
-dotenv.config();
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = process.env.PORT||3000;
-const CLIENT_ID=process.env.CLIENT_ID;
-const CLIENT_SECRET=process.env.CLIENT_SECRET;
-const REDIRECT_URI=process.env.REDIRECT_URI;
+const FILE = './systems.json';
 
-let routes={};
-
-app.get('/', (req,res)=>res.json({status:'Server running'}));
-
-// OAuth обмен
-app.post('/exchange', async (req,res)=>{
-  try{
-    const {code}=req.body;
-    if(!code) return res.status(400).json({error:'code required'});
-    const params = new URLSearchParams();
-    params.append('grant_type','authorization_code');
-    params.append('code',code);
-    const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-    const tokenResp = await fetch('https://login.eveonline.com/v2/oauth/token',{
-      method:'POST', body: params, headers:{'Authorization':`Basic ${auth}`,'Content-Type':'application/x-www-form-urlencoded'}
-    });
-    const tokenData=await tokenResp.json();
-    if(tokenData.error) return res.status(400).json(tokenData);
-    const userResp = await fetch('https://esi.evetech.net/latest/verify/',{headers:{'Authorization':`Bearer ${tokenData.access_token}`}});
-    const userData = await userResp.json();
-    res.json({access_token:tokenData.access_token, character:{CharacterID:userData.CharacterID,CharacterName:userData.CharacterName}});
-  }catch(e){ console.error(e); res.status(500).json({error:e.message}); }
+// Получить все системы
+app.get('/systems', (req, res) => {
+  if(!fs.existsSync(FILE)) return res.json([]);
+  const data = fs.readFileSync(FILE);
+  res.json(JSON.parse(data));
 });
 
-// Маршруты
-app.get('/route/:characterId',(req,res)=>res.json(routes[req.params.characterId]||{nodes:[],edges:[]}));
-app.post('/route/:characterId',(req,res)=>{routes[req.params.characterId]=req.body; res.json({success:true});});
-app.delete('/route/:characterId',(req,res)=>{delete routes[req.params.characterId]; res.json({success:true});});
+// Добавить/обновить систему
+app.post('/systems', (req, res) => {
+  const newSystem = req.body; // {id, name, x, y, connections, home}
+  let systems = [];
+  if(fs.existsSync(FILE)){
+    systems = JSON.parse(fs.readFileSync(FILE));
+    const idx = systems.findIndex(s=>s.id===newSystem.id);
+    if(idx>=0) systems[idx] = newSystem;
+    else systems.push(newSystem);
+  } else {
+    systems.push(newSystem);
+  }
+  fs.writeFileSync(FILE, JSON.stringify(systems, null, 2));
+  res.json({success:true});
+});
 
-app.listen(PORT, ()=>console.log(`Server running on ${PORT}`));
+// Очистить все системы
+app.delete('/systems', (req, res) => {
+  fs.writeFileSync(FILE, '[]');
+  res.json({success:true});
+});
+
+app.listen(process.env.PORT || 3000, ()=>console.log('Server running'));
