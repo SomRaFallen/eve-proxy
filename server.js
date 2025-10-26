@@ -49,7 +49,7 @@ app.post('/exchange', async (req,res)=>{
   }catch(e){ res.status(500).json({ error:e.message }); }
 });
 
-// --- маршруты Wormhole Map ---
+// --- Wormhole Map ---
 app.get('/route/:characterId', (req,res)=>{
   res.json(routes[req.params.characterId] || { nodes:[], edges:[] });
 });
@@ -68,7 +68,6 @@ app.delete('/route/:characterId', (req,res)=>{
 app.get('/search', async (req,res)=>{
   const { query } = req.query;
   if(!query) return res.json([]);
-
   try{
     const resp = await fetch(`https://esi.evetech.net/latest/search/?categories=character&search=${encodeURIComponent(query)}&strict=false`);
     const data = await resp.json();
@@ -93,6 +92,6 @@ app.get('/zkbKills', async (req,res)=>{
   }catch(e){ res.status(500).json({ error:e.message }); }
 });
 
-app.get('/', (req,res)=>res.send('✅ EVE WH Map backend running (with auth & editable map)'));
+app.get('/', (req,res)=>res.send('✅ EVE WH Map backend running'));
 
 app.listen(PORT, ()=>console.log(`✅ Server running on port ${PORT}`));
