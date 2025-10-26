@@ -7,7 +7,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Берём все переменные из Environment Render
+// Берём переменные из Environment Render
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -112,6 +112,11 @@ app.get('/search', async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// --- Добавлен GET / для проверки ---
+app.get('/', (req, res) => {
+  res.send('✅ EVE WH Map backend is running!');
 });
 
 // --- Запуск сервера ---
