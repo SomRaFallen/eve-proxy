@@ -35,16 +35,18 @@ app.post('/exchange', async (req, res) => {
       },
     });
 
-    const text = await tokenResp.text(); // читаем как текст
-    let tokenData;
-    try {
-      tokenData = JSON.parse(text); // пробуем распарсить JSON
-    } catch {
-      // если не JSON → возвращаем raw текст фронтенду
-      return res.status(500).json({ error: 'Invalid response from EVE', raw: text });
+    const text = await tokenResp.text();
+
+    if (!tokenResp.ok) {
+      return res.status(500).json({ error: 'EVE returned error', raw: text });
     }
 
-    if (tokenData.error) return res.status(400).json(tokenData);
+    let tokenData;
+    try {
+      tokenData = JSON.parse(text);
+    } catch {
+      return res.status(500).json({ error: 'Invalid JSON from EVE', raw: text });
+    }
 
     const userResp = await fetch('https://esi.evetech.net/latest/verify/', {
       headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
@@ -71,7 +73,7 @@ app.post('/exchange', async (req, res) => {
   }
 });
 
-// --- остальные маршруты ---
+// --- Остальные маршруты ---
 app.get('/route/:characterId', (req,res)=>res.json(routes[req.params.characterId]||{nodes:[],edges:[]}))
 app.post('/route/:characterId',(req,res)=>{ routes[req.params.characterId]=req.body; res.json({success:true}); })
 app.delete('/route/:characterId',(req,res)=>{ delete routes[req.params.characterId]; res.json({success:true}); })
