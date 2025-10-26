@@ -2,14 +2,12 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import cors from 'cors';
-import dotenv from 'dotenv';
-
-dotenv.config(); // подгружаем переменные из .env
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Берём все переменные из Environment Render
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -17,7 +15,7 @@ const REDIRECT_URI = process.env.REDIRECT_URI;
 
 let routes = {}; // маршруты персонажей
 
-// --- Авторизация через EVE Online ---
+// --- OAuth EVE Online ---
 app.post('/exchange', async (req, res) => {
   try {
     const { code } = req.body;
