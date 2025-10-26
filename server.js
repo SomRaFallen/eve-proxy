@@ -1,5 +1,4 @@
 import express from 'express';
-import fetch from 'node-fetch';
 import cors from 'cors';
 
 const app = express();
@@ -7,102 +6,45 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const REDIRECT_URI = process.env.REDIRECT_URI;
 
 let routes = {};
 
-// --- POST /exchange ---
-app.post('/exchange', async (req, res) => {
-  try {
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ error: 'code required' });
-
-    const params = new URLSearchParams();
-    params.append('grant_type', 'authorization_code');
-    params.append('code', code);
-    params.append('redirect_uri', REDIRECT_URI);
-
-    const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
-
-    const tokenResp = await fetch('https://login.eveonline.com/v2/oauth/token', {
-      method: 'POST',
-      body: params,
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-    });
-
-    const text = await tokenResp.text();
-
-    if (!tokenResp.ok) {
-      return res.status(500).json({ error: 'EVE returned error', raw: text });
-    }
-
-    let tokenData;
-    try {
-      tokenData = JSON.parse(text);
-    } catch {
-      return res.status(500).json({ error: 'Invalid JSON from EVE', raw: text });
-    }
-
-    const userResp = await fetch('https://esi.evetech.net/latest/verify/', {
-      headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
-    });
-    const userData = await userResp.json();
-
-    const locResp = await fetch(
-      `https://esi.evetech.net/latest/characters/${userData.CharacterID}/location/`,
-      { headers: { 'Authorization': `Bearer ${tokenData.access_token}` } }
-    );
-    const locData = await locResp.json();
-
-    const character = {
-      CharacterID: userData.CharacterID,
-      CharacterName: userData.CharacterName,
-      SystemID: locData.solar_system_id || null,
-    };
-
-    res.json({ access_token: tokenData.access_token, character });
-
-  } catch (e) {
-    console.error('Exchange error:', e);
-    res.status(500).json({ error: e.message });
-  }
+// --- маршруты для карты ---
+app.get('/route/:characterId', (req,res)=>{
+  res.json(routes[req.params.characterId] || { nodes:[], edges:[] });
 });
 
-// --- Остальные маршруты ---
-app.get('/route/:characterId', (req,res)=>res.json(routes[req.params.characterId]||{nodes:[],edges:[]}))
-app.post('/route/:characterId',(req,res)=>{ routes[req.params.characterId]=req.body; res.json({success:true}); })
-app.delete('/route/:characterId',(req,res)=>{ delete routes[req.params.characterId]; res.json({success:true}); })
+app.post('/route/:characterId', (req,res)=>{
+  routes[req.params.characterId] = req.body;
+  res.json({ success:true });
+});
 
-app.get('/zkbKills', async (req,res)=>{
+app.delete('/route/:characterId', (req,res)=>{
+  delete routes[req.params.characterId];
+  res.json({ success:true });
+});
+
+// --- поиск персонажей (только заглушка) ---
+app.get('/search', (req,res)=>{
+  const { query } = req.query;
+  if(!query) return res.json([]);
+  // Пример статичного ответа
+  res.json([{ id:1, name:"Character One"}, { id:2, name:"Character Two"}]);
+});
+
+// --- киллы (заглушка) ---
+app.get('/zkbKills', (req,res)=>{
   const { characterId } = req.query;
   if(!characterId) return res.status(400).json({ error:'characterId required' });
-  try{
-    const resp = await fetch(`https://zkillboard.com/api/characters/${characterId}/recent.json/`);
-    const data = await resp.json();
-    const kills = data.slice(0,10).map(k=>({
-      solarSystem:k.solarSystemName,
-      date:k.killTime,
-      ship:k.victim.shipTypeName
-    }));
-    res.json(kills);
-  }catch(e){ res.status(500).json({ error:e.message }); }
+
+  res.json([
+    { solarSystem:"J12345", date:"2025-10-26T12:00:00Z", ship:"Rifter" },
+    { solarSystem:"J54321", date:"2025-10-25T18:30:00Z", ship:"Astero" },
+  ]);
 });
 
-app.get('/search', async (req,res)=>{
-  const { query } = req.query;
-  if(!query) return res.status(400).json([]);
-  try{
-    const searchResp = await fetch(`https://esi.evetech.net/latest/search/?categories=character&search=${encodeURIComponent(query)}&strict=false`);
-    const searchData = await searchResp.json();
-    res.json((searchData.character||[]).map(id=>({id,name:`Character ${id}`})));
-  } catch(e){ res.status(500).json({ error:e.message }); }
+app.get('/', (req,res)=>{
+  res.send('✅ EVE WH Map backend running (no auth)');
 });
-
-app.get('/', (req,res)=>{ res.send('✅ EVE WH Map backend is running!'); });
 
 app.listen(PORT, ()=>console.log(`✅ Server running on port ${PORT}`));
