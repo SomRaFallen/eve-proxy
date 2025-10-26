@@ -13,6 +13,7 @@ const REDIRECT_URI = process.env.REDIRECT_URI;
 
 let routes = {};
 
+// --- POST /exchange ---
 app.post('/exchange', async (req, res) => {
   try {
     const { code } = req.body;
@@ -34,12 +35,12 @@ app.post('/exchange', async (req, res) => {
       },
     });
 
-    // Обрабатываем любой ответ от EVE
+    const text = await tokenResp.text(); // читаем как текст
     let tokenData;
-    const text = await tokenResp.text();
     try {
-      tokenData = JSON.parse(text);
+      tokenData = JSON.parse(text); // пробуем распарсить JSON
     } catch {
+      // если не JSON → возвращаем raw текст фронтенду
       return res.status(500).json({ error: 'Invalid response from EVE', raw: text });
     }
 
