@@ -7,13 +7,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Берём переменные из Environment Render
 const PORT = process.env.PORT || 3000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
 
-let routes = {}; // маршруты персонажей
+let routes = {};
 
 // --- OAuth EVE Online ---
 app.post('/exchange', async (req, res) => {
@@ -24,7 +23,7 @@ app.post('/exchange', async (req, res) => {
     const params = new URLSearchParams();
     params.append('grant_type', 'authorization_code');
     params.append('code', code);
-    params.append('redirect_uri', REDIRECT_URI);
+    params.append('redirect_uri', REDIRECT_URI); // обязательно
 
     const auth = Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
 
@@ -114,10 +113,9 @@ app.get('/search', async (req, res) => {
   }
 });
 
-// --- Добавлен GET / для проверки ---
+// --- GET / для проверки ---
 app.get('/', (req, res) => {
   res.send('✅ EVE WH Map backend is running!');
 });
 
-// --- Запуск сервера ---
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
