@@ -22,10 +22,4 @@ app.post('/route/:characterId', (req,res)=>{
   res.json({ success: true });
 });
 
-app.delete('/route/:characterId', (req,res)=>{
-  const charId = req.params.characterId;
-  delete routes[charId];
-  res.json({ success: true });
-});
-
 app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
